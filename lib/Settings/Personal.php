@@ -2,50 +2,62 @@
 namespace OCA\Google\Settings;
 
 use OCP\AppFramework\Http\TemplateResponse;
-use OCP\IRequest;
-use OCP\IL10N;
+use OCP\AppFramework\Services\IInitialState;
 use OCP\IConfig;
 use OCP\Settings\ISettings;
-use OCP\Util;
 use OCP\IUserManager;
-use OCP\IURLGenerator;
-use OCP\IInitialStateService;
 use OCP\Files\IRootFolder;
+
 use OCA\Google\AppInfo\Application;
+use OCA\Google\Service\GoogleAPIService;
 
 class Personal implements ISettings {
 
-	private $request;
+	/**
+	 * @var IConfig
+	 */
 	private $config;
-	private $dataDirPath;
-	private $urlGenerator;
-	private $l;
+	/**
+	 * @var IRootFolder
+	 */
+	private $root;
+	/**
+	 * @var IUserManager
+	 */
+	private $userManager;
+	/**
+	 * @var IInitialState
+	 */
+	private $initialStateService;
+	/**
+	 * @var string|null
+	 */
+	private $userId;
+	/**
+	 * @var GoogleAPIService
+	 */
+	private $googleAPIService;
 
-	public function __construct(string $appName,
-								IL10N $l,
-								IRequest $request,
+	public function __construct(
 								IConfig $config,
-								IURLGenerator $urlGenerator,
 								IRootFolder $root,
 								IUserManager $userManager,
-								IInitialStateService $initialStateService,
-								$userId) {
-		$this->appName = $appName;
-		$this->urlGenerator = $urlGenerator;
-		$this->request = $request;
-		$this->l = $l;
+								IInitialState $initialStateService,
+								GoogleAPIService $googleAPIService,
+								?string $userId) {
 		$this->config = $config;
 		$this->root = $root;
 		$this->userManager = $userManager;
 		$this->initialStateService = $initialStateService;
 		$this->userId = $userId;
+		$this->googleAPIService = $googleAPIService;
 	}
 
 	/**
 	 * @return TemplateResponse
 	 */
 	public function getForm(): TemplateResponse {
-		$userName = $this->config->getUserValue($this->userId, Application::APP_ID, 'user_name', '');
+		$userName = $this->config->getUserValue($this->userId, Application::APP_ID, 'user_name');
 		$driveOutputDir = $this->config->getUserValue($this->userId, Application::APP_ID, 'drive_output_dir', '/Google Drive');
 		$driveOutputDir = $driveOutputDir ?: '/Google Drive';
 		$photoOutputDir = $this->config->getUserValue($this->userId, Application::APP_ID, 'photo_output_dir', '/Google Photos');
@@ -58,13 +70,23 @@ class Personal implements ISettings {
 		}
 
 		// for OAuth
-		$clientID = $this->config->getAppValue(Application::APP_ID, 'client_id', '');
-		$clientSecret = $this->config->getAppValue(Application::APP_ID, 'client_secret', '') !== '';
+		$clientID = $this->config->getAppValue(Application::APP_ID, 'client_id');
+		$clientSecret = $this->config->getAppValue(Application::APP_ID, 'client_secret') !== '';
 
 		// get free space
 		$userFolder = $this->root->getUserFolder($this->userId);
 		$freeSpace = $userFolder->getStorage()->free_space('/');
 		$user = $this->userManager->get($this->userId);
+
+		// make a request to potentially refresh the token before the settings page is loaded
+		$accessToken = $this->config->getUserValue($this->userId, Application::APP_ID, 'token');
+		if ($accessToken) {
+			$info = $this->googleAPIService->request($accessToken, $this->userId, 'oauth2/v1/userinfo', ['alt' => 'json']);
+		}
+
+		// Get scopes of user
+		$userScopes = $this->config->getUserValue($this->userId, Application::APP_ID, 'user_scopes', '{}');
+		$userScopes = json_decode($userScopes);
 
 		$userConfig = [
 			'client_id' => $clientID,
@@ -77,10 +99,10 @@ class Personal implements ISettings {
 			'document_format' => $documentFormat,
 			'drive_output_dir' => $driveOutputDir,
 			'photo_output_dir' => $photoOutputDir,
+			'user_scopes' => $userScopes,
 		];
-		$this->initialStateService->provideInitialState($this->appName, 'user-config', $userConfig);
-		$response = new TemplateResponse(Application::APP_ID, 'personalSettings');
-		return $response;
+		$this->initialStateService->provideInitialState('user-config', $userConfig);
+		return new TemplateResponse(Application::APP_ID, 'personalSettings');
 	}
 
 	public function getSection(): string {

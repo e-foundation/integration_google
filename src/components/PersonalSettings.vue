@@ -10,9 +10,9 @@
 		<div v-else
 			id="google-content">
 			<h3>{{ t('integration_google', 'Authentication') }}</h3>
-			<button v-if="!connected" id="google-oauth" @click="onOAuthClick">
-				<span class="icon icon-external" />
-				{{ t('integration_google', 'Connect to Google') }}
+			<button v-if="!connected" class="google-oauth" @click="onOAuthClick">
+				<span class="google-signin" />
+				<span>{{ t('integration_google', 'Sign in with Google') }}</span>
 			</button>
 			<div v-else>
 				<div class="google-grid-form">
@@ -96,7 +96,7 @@
 					</div>
 					<p v-if="!importingPhotos" class="settings-hint">
 						<span class="icon icon-details" />
-						{{ t('integration_google', 'Warning, Google does not provide location data in imported photos.') }}
+						{{ t('integration_google', 'Warning: Google does not provide location data in imported photos.') }}
 					</p>
 					<div v-if="!importingPhotos" class="output-selection">
 						<label for="photo-output">
@@ -106,7 +106,7 @@
 						<input id="photo-output"
 							:readonly="true"
 							:value="state.photo_output_dir">
-						<button
+						<button class="edit-output-dir"
 							@click="onPhotoOutputChange">
 							<span class="icon-rename" />
 						</button>
@@ -116,8 +116,8 @@
 						<label>
 							<span class="icon icon-toggle-pictures" />
 							{{ n('integration_google',
-								'~{nbPhotos} Google photo (~{formSize})',
-								'~{nbPhotos} Google photos (~{formSize})',
+								'>{nbPhotos} Google photo (>{formSize})',
+								'>{nbPhotos} Google photos (>{formSize})',
 								nbPhotos,
 								{ nbPhotos, formSize: myHumanFileSize(estimatedPhotoCollectionSize, true) })
 							}}
@@ -185,7 +185,7 @@
 						<input id="drive-output"
 							:readonly="true"
 							:value="state.drive_output_dir">
-						<button
+						<button class="edit-output-dir"
 							@click="onDriveOutputChange">
 							<span class="icon-rename" />
 						</button>
@@ -354,13 +354,21 @@ export default {
 
 		// get informations if we are connected
 		if (this.showOAuth && this.connected) {
-			this.getGoogleCalendarList()
-			this.getLocalAddressBooks()
-			this.getNbGoogleContacts()
-			this.getNbGooglePhotos()
-			this.getPhotoImportValues(true)
-			this.getGoogleDriveInfo()
-			this.getDriveImportValues(true)
+			if (this.state.user_scopes.can_access_calendar) {
+				this.getGoogleCalendarList()
+				this.getLocalAddressBooks()
+			}
+			if (this.state.user_scopes.can_access_contacts) {
+				this.getNbGoogleContacts()
+			}
+			if (this.state.user_scopes.can_access_photos) {
+				this.getNbGooglePhotos()
+				this.getPhotoImportValues(true)
+			}
+			if (this.state.user_scopes.can_access_drive) {
+				this.getGoogleDriveInfo()
+				this.getDriveImportValues(true)
+			}
 		}
 	},
 
@@ -864,6 +872,28 @@ body.theme--dark .icon-google-settings {
 		}
 		button {
 			width: 44px !important;
+		}
+	}
+
+	.edit-output-dir {
+		padding: 6px 6px;
+	}
+
+	.google-oauth {
+		color: white;
+		background-color: #4580F1;
+		border-radius: 4px;
+		padding: 0;
+		display: flex;
+		align-items: center;
+		.google-signin {
+			background: url('../../img/google.svg');
+			width: 46px;
+			height: 46px;
+		}
+		span {
+			padding: 0 8px 0 8px;
+			font-size: 1.1em;
 		}
 	}
 }
